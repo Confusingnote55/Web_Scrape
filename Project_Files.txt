@@ -1,0 +1,707 @@
+# All Project Files Extract
+# Generated on: /Users/a.y/Web_Scraper_Template
+# Excludes: .venv, build/cache, and 'data*' dirs (except 'data')
+
+================================================================================
+File: Project->TXT.py
+================================================================================
+import os
+from pathlib import Path
+
+def is_text_file(file_path):
+    """Check if file is likely a text file by extension or name."""
+    text_extensions = {
+        '.py', '.js', '.html', '.css', '.md', '.txt', '.yml', '.yaml', 
+        '.json', '.xml', '.csv', '.sql', '.sh', '.bash', '.zsh',
+        '.cfg', '.conf', '.ini', '.env', '.log', '.rst', '.toml'
+    }
+    basename_matches = {
+        'Makefile', 'Dockerfile', 'Procfile', 'requirements.txt', 'README'
+    }
+    if file_path.suffix.lower() in text_extensions:
+        return True
+    if not file_path.suffix and file_path.name in basename_matches:
+        return True
+    return False
+
+def should_skip_directory(dir_name):
+    """
+    Skip directory if:
+    1. It matches known skip_dirs.
+    2. It contains 'data' (case-insensitive), unless exactly 'data'.
+    """
+    skip_dirs = {
+        'scrape_env', '.venv', '__pycache__', '.git', '.mypy_cache',
+        '.pytest_cache', '.tox', '.idea', '.vscode', '.DS_Store'
+    }
+    lname = dir_name.lower()
+    if dir_name in skip_dirs:
+        return True
+    if "data" in lname and lname != "data":
+        return True
+    return False
+
+def extract_all_text(output_file='Project_Files.txt'):
+    """Extract text from all project files, skipping unwanted dirs."""
+    current_dir = Path('.')
+    files_processed = 0
+    total_chars = 0
+
+    print(f"📁 Scanning directory: {current_dir.absolute()}")
+
+    with open(output_file, 'w', encoding='utf-8') as out:
+        out.write(f"# All Project Files Extract\n")
+        out.write(f"# Generated on: {Path.cwd()}\n") 
+        out.write(f"# Excludes: .venv, build/cache, and 'data*' dirs (except 'data')\n\n")
+        
+        for root, dirs, files in os.walk(current_dir, topdown=True):
+            dirs[:] = [d for d in dirs if not should_skip_directory(d)]
+            root_path = Path(root)
+            for file_name in sorted(files):
+                file_path = root_path / file_name
+                if not is_text_file(file_path) or file_name == output_file:
+                    continue
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        content = f.read()
+                    if not content.strip():
+                        continue
+                    relative_path = file_path.relative_to(current_dir)
+                    out.write('=' * 80 + '\n')
+                    out.write(f'File: {relative_path}\n')
+                    out.write('=' * 80 + '\n')
+                    out.write(content)
+                    out.write('\n\n')
+                    files_processed += 1
+                    total_chars += len(content)
+                    print(f"✅ {relative_path} ({len(content):,} chars)")
+                except Exception as e:
+                    print(f"⚠️  Skipping {file_path}: {e}")
+
+    print(f"\n🎉 Your files have been summarise!! 🙏🙏🙏")
+    print(f"   📁 Files processed: {files_processed}")
+    print(f"   📝 Total characters: {total_chars:,}")
+    print(f"   💾 Output file: {output_file}")
+    output_size = Path(output_file).stat().st_size
+    print(f"   📏 Output size: {output_size:,} bytes ({output_size/1024/1024:.1f} MB)")
+
+if __name__ == "__main__":
+    extract_all_text()
+
+
+================================================================================
+File: requirements.txt
+================================================================================
+requests
+beautifulsoup4
+ultimate-sitemap-parser
+tqdm
+selenium
+webdriver-manager
+html_to_markdown
+pillow
+
+================================================================================
+File: src/debug_screenshot.py
+================================================================================
+from selenium import webdriver
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.firefox import GeckoDriverManager
+import time
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Define constants
+SITEMAP_URL = "https://geekymedics.com/sitemap_index.xml"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+}
+
+def take_screenshot(url, attempt):
+    """Take a screenshot of the given URL and save it."""
+    try:
+        # Set up Firefox options
+        firefox_options = webdriver.FirefoxOptions()
+        firefox_options.add_argument("--headless")  # Run in headless mode
+        firefox_options.set_preference("general.useragent.override", HEADERS["User-Agent"])
+
+        # Initialize WebDriver
+        service = FirefoxService(GeckoDriverManager().install())
+        driver = webdriver.Firefox(service=service, options=firefox_options)
+
+        # Load the URL and wait for content
+        logging.info(f"Attempt {attempt + 1} - Loading {url}...")
+        driver.get(url)
+        time.sleep(5)  # Wait for page to load, including potential JavaScript
+
+        # Take screenshot
+        screenshot_path = f"sitemap_screenshot_attempt{attempt}.png"
+        driver.save_screenshot(screenshot_path)
+        logging.info(f"Screenshot saved as {screenshot_path}")
+
+        # Get page source for reference
+        page_source = driver.page_source
+        with open(f"sitemap_source_attempt{attempt}.html", "w", encoding="utf-8") as f:
+            f.write(page_source)
+        logging.info(f"Page source saved as sitemap_source_attempt{attempt}.html")
+
+        driver.quit()
+        return page_source
+    except Exception as e:
+        logging.error(f"Attempt {attempt + 1} failed: {e}")
+        if 'driver' in locals():
+            driver.quit()
+        return None
+
+def main():
+    """Main function to run the screenshot debug process."""
+    logging.info("Starting screenshot debug process...")
+    for attempt in range(3):
+        page_source = take_screenshot(SITEMAP_URL, attempt)
+        if page_source:
+            break
+        time.sleep(2 ** attempt)  # Exponential backoff
+    if not page_source:
+        logging.error("Failed to capture screenshot after 3 attempts.")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+File: src/dynamic_scraper.py
+================================================================================
+import os
+import sys
+import json
+import time
+import logging
+import shutil
+import argparse
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from tqdm import tqdm
+
+# --- Basic Configuration ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger('selenium').setLevel(logging.WARNING)
+
+def get_page_source_with_selenium(driver, url, wait_for_selector):
+    """Navigates to a URL and waits for a specific element to appear."""
+    try:
+        driver.get(url)
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, wait_for_selector))
+        )
+        return driver.page_source
+    except Exception as e:
+        logging.error(f"Selenium failed to load {url} or find element '{wait_for_selector}': {e}")
+        return ""
+
+def get_all_links_with_pagination(index_url, base_url, link_selector, next_page_selector):
+    """
+    Scrapes an index page for all links, automatically handling pagination by clicking a 'next' button.
+    """
+    options = Options()
+    options.add_argument('--headless')
+    service = Service()
+    driver = webdriver.Firefox(service=service, options=options)
+    
+    all_links = []
+    current_url = index_url
+
+    try:
+        driver.get(current_url)
+        # Handle initial cookie banner on the first page
+        try:
+            cookie_button_xpath = "//button[contains(., 'Accept all') or contains(., 'Accept')]"
+            cookie_button = WebDriverWait(driver, 7).until(EC.element_to_be_clickable((By.XPATH, cookie_button_xpath)))
+            cookie_button.click()
+            logging.info("Cookie consent button clicked.")
+            time.sleep(2)
+        except Exception:
+            logging.info("No cookie consent banner found.")
+
+        page_num = 1
+        while True:
+            logging.info(f"Scraping links from page: {current_url}")
+            WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, link_selector)))
+            soup = BeautifulSoup(driver.page_source, 'lxml')
+            
+            link_elements = soup.select(link_selector)
+            if not link_elements:
+                logging.warning(f"No links found on page {page_num}.")
+                break
+            
+            for link_tag in link_elements:
+                href = link_tag.get('href')
+                if href and "http" in href:
+                    all_links.append(href)
+
+            try:
+                # Find the 'Next Page' button and click it
+                next_button = driver.find_element(By.CSS_SELECTOR, next_page_selector)
+                driver.execute_script("arguments[0].click();", next_button)
+                time.sleep(3) # Wait for the new page to load
+                current_url = driver.current_url
+                page_num += 1
+            except Exception:
+                logging.info("No more 'Next Page' buttons found. Concluding link gathering.")
+                break # Exit loop if no 'next' button is found
+    
+    except Exception as e:
+        logging.error(f"An error occurred during link gathering: {e}")
+    finally:
+        driver.quit()
+
+    return sorted(list(set(all_links)))
+
+
+def scrape_page(url, title_selector, content_selector):
+    """Scrapes a single content page and converts its content to Markdown."""
+    # This function can reuse a simplified selenium loader without pagination logic
+    options = Options()
+    options.add_argument('--headless')
+    service = Service()
+    driver = webdriver.Firefox(service=service, options=options)
+    html_content = ""
+    try:
+        html_content = get_page_source_with_selenium(driver, url, content_selector)
+    finally:
+        driver.quit()
+
+    if not html_content:
+        return ""
+
+    soup = BeautifulSoup(html_content, 'lxml')
+    markdown_lines = []
+    
+    title_tag = soup.select_one(title_selector)
+    if title_tag:
+        markdown_lines.append(f"# {title_tag.get_text(strip=True)}\n")
+
+    content_container = soup.select_one(content_selector)
+    if content_container:
+        for element in content_container.find_all(['h3', 'p', 'ul', 'ol']):
+            if element.name == 'h3':
+                markdown_lines.append(f"### {element.get_text(strip=True)}\n")
+            elif element.name == 'p':
+                text = element.get_text(strip=True)
+                if text:
+                    markdown_lines.append(f"{text}\n")
+            elif element.name in ['ul', 'ol']:
+                for li in element.find_all('li', recursive=False):
+                    text = li.get_text(strip=True)
+                    if text:
+                        markdown_lines.append(f"* {text}")
+                markdown_lines.append("")
+
+    return "\n".join(markdown_lines)
+
+
+def main():
+    """Sets up the CLI arguments and orchestrates the entire scraping process."""
+    parser = argparse.ArgumentParser(description="A dynamic web scraper with pagination handling.")
+    
+    parser.add_argument('project_name', help="A name for your project.")
+    parser.add_argument('--index_url', required=True, help="The starting URL of the index page.")
+    parser.add_argument('--base_url', required=True, help="The base URL for constructing full links.")
+    parser.add_argument('--link_selector', required=True, help="The CSS selector for the article links.")
+    parser.add_argument('--next_page_selector', required=True, help="The CSS selector for the 'Next Page' button.")
+    parser.add_argument('--title_selector', required=True, help="The CSS selector for the article title.")
+    parser.add_argument('--content_selector', required=True, help="The CSS selector for the article content container.")
+    parser.add_argument('--delay', type=int, default=3, help="Delay between scraping each article.")
+
+    args = parser.parse_args()
+    
+    urls_file_path = f"data/{args.project_name}_urls.json"
+    all_links = get_all_links_with_pagination(args.index_url, args.base_url, args.link_selector, args.next_page_selector)
+    
+    if not all_links:
+        logging.error("No links were found. Exiting.")
+        sys.exit(1)
+        
+    with open(urls_file_path, 'w') as f:
+        json.dump(all_links, f, indent=2)
+    logging.info(f"Found {len(all_links)} links across all pages. Saved to {urls_file_path}.")
+    
+    try:
+        input("\nPress Enter to continue with scraping content...")
+    except KeyboardInterrupt:
+        logging.info("\nExiting.")
+        sys.exit(0)
+
+    output_dir = f"data/scraped_{args.project_name}"
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    logging.info(f"Starting content scrape for {len(all_links)} URLs...")
+    for url in tqdm(all_links, desc=f"Scraping {args.project_name}"):
+        topic_id = url.strip('/').split('/')[-1] if url.strip('/') else 'index'
+        markdown_content = scrape_page(url, args.title_selector, args.content_selector)
+        
+        if not markdown_content.strip():
+             tqdm.write(f"WARNING: No content found for {topic_id}.")
+        
+        md_path = f"{output_dir}/{topic_id}.md"
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+
+        time.sleep(args.delay)
+    
+    logging.info("Scraping complete.")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+File: src/get_sub_indexes.py
+================================================================================
+import os
+import json
+import logging
+import argparse
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from tqdm import tqdm
+
+# Suppress noisy Selenium logs
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger('selenium').setLevel(logging.WARNING)
+
+def get_sub_index_links(start_url, wait_for_selector, link_selector):
+    """
+    Scrapes a top-level index page for sub-index URLs with robust pop-up handling.
+    """
+    logging.info(f"Starting to scrape sub-index links from: {start_url}")
+    
+    options = Options()
+    options.add_argument('--headless')
+    service = Service()
+    driver = webdriver.Firefox(service=service, options=options)
+    
+    sub_index_links = []
+    try:
+        driver.get(start_url)
+        time.sleep(3) # A brief initial wait for things to start loading
+
+        # --- OPTIMIZED: More specific and robust cookie handling ---
+        try:
+            # Using the specific ID of the button is more reliable
+            cookie_button_selector = "button#cky-btn-accept"
+            cookie_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, cookie_button_selector))
+            )
+            cookie_button.click()
+            logging.info("Clicked main cookie consent button.")
+            time.sleep(2) # Allow time for the banner to disappear
+        except Exception:
+            logging.info("No cookie consent banner found or it was not clickable within the time limit.")
+            
+        # --- OPTIMIZED: Using a more reliable wait condition ---
+        # Waits for the element to be in the DOM, not necessarily visible.
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, wait_for_selector))
+        )
+        logging.info("Main content landmark is now present in the DOM.")
+        
+        # Find all the link elements
+        link_elements = driver.find_elements(By.CSS_SELECTOR, link_selector)
+        
+        for link in tqdm(link_elements, desc="Extracting links"):
+            href = link.get_attribute('href')
+            if href:
+                sub_index_links.append(href)
+        
+    except Exception as e:
+        logging.error(f"An error occurred during scraping: {e}")
+    finally:
+        driver.quit()
+
+    return sorted(list(set(sub_index_links)))
+
+def main():
+    """Sets up CLI arguments and runs the sub-index scraper."""
+    parser = argparse.ArgumentParser(description="A dynamic CLI tool to find and save sub-index URLs from a main index page.")
+    
+    parser.add_argument('project_name', help="A name for your project (e.g., 'geekymedics_mla').")
+    parser.add_argument('--start_url', required=True, help="The URL of the top-level index page.")
+    parser.add_argument('--wait_selector', required=True, help="A stable CSS selector on the page to wait for before scraping.")
+    parser.add_argument('--link_selector', required=True, help="The CSS selector to find all the sub-index links.")
+    
+    args = parser.parse_args()
+    
+    output_file = f"data/{args.project_name}_sub_urls.json"
+    
+    unique_links = get_sub_index_links(args.start_url, args.wait_selector, args.link_selector)
+    
+    if unique_links:
+        os.makedirs('data', exist_ok=True)
+        with open(output_file, 'w') as f:
+            json.dump(unique_links, f, indent=2)
+        logging.info(f"Found {len(unique_links)} unique sub-index links. Saved to {output_file}")
+    else:
+        logging.warning("No sub-index links were found.")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+File: src/master_scraper.py
+================================================================================
+import os
+import logging
+import argparse
+import json
+import time
+import hashlib
+from urllib.parse import urljoin, urlparse
+
+# Standard library imports
+import requests
+from bs4 import BeautifulSoup
+from tqdm import tqdm
+
+# Third-party imports
+from usp.tree import sitemap_tree_for_homepage
+from usp.web_client.requests_client import RequestsWebClient
+from selenium import webdriver
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.firefox import GeckoDriverManager
+from selenium.common.exceptions import TimeoutException
+from PIL import Image
+import io
+
+# --- Setup Logging ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger('selenium').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+
+
+def find_main_content(soup):
+    """
+    Heuristically finds the main content block of an article.
+    """
+    selectors = [
+        '#content', '.post-content', '.entry-content', 'article', 'main',
+        '.article-content', '.article-body', '#main', '.post'
+    ]
+    for selector in selectors:
+        main_content = soup.select_one(selector)
+        if main_content and len(main_content.get_text(strip=True)) > 200:
+            return main_content
+    return None
+
+
+def get_page_source_with_selenium(driver, url):
+    """Uses Selenium to get the full page source after JS rendering."""
+    try:
+        driver.get(url)
+        time.sleep(3)
+        return driver.page_source
+    except Exception as e:
+        tqdm.write(f" Selenium error for URL {url}: {e}")
+        return None
+
+
+def get_all_article_urls(homepage_url, user_agent, scope_url=None, exclude_keywords=None):
+    """
+    STAGE 1: Scrapes the sitemap and filters URLs based on scope and exclusion keywords.
+    """
+    logging.info(f"--- STAGE 1: Starting Sitemap Scrape for {homepage_url} ---")
+    try:
+        session = requests.Session()
+        session.headers.update({'User-Agent': user_agent})
+        web_client = RequestsWebClient(session=session)
+        tree = sitemap_tree_for_homepage(homepage_url=homepage_url, web_client=web_client)
+        all_urls = [page.url for page in tree.all_pages()]
+        logging.info(f"Sitemap scrape complete. Found {len(all_urls)} total URLs.")
+
+        # --- NEW: Filter URLs based on exclusion keywords ---
+        if exclude_keywords:
+            keywords_to_exclude = [kw.strip() for kw in exclude_keywords.split(',')]
+            original_count = len(all_urls)
+            all_urls = [url for url in all_urls if not any(keyword in url for keyword in keywords_to_exclude)]
+            logging.info(f"Excluded {original_count - len(all_urls)} URLs based on keywords.")
+
+        # Filter URLs based on the scope
+        if scope_url:
+            original_count = len(all_urls)
+            all_urls = [url for url in all_urls if url.startswith(scope_url)]
+            logging.info(f"Filtered to {len(all_urls)} URLs within the scope: {scope_url}")
+            
+        return all_urls
+
+    except Exception as e:
+        logging.error(f"Sitemap scraping failed: {e}", exc_info=True)
+        return []
+
+
+def download_images(article_div, page_url, output_dir):
+    """
+    Finds, downloads, and converts images, handling WebP format.
+    """
+    if not article_div: return []
+    images = article_div.find_all('img')
+    if not images: return []
+    
+    images_dir = os.path.join(output_dir, 'images')
+    os.makedirs(images_dir, exist_ok=True)
+    session = requests.Session()
+    image_metadata_list = []
+
+    for i, img in enumerate(images):
+        src = img.get('src')
+        if not src or not src.startswith('http'): continue
+        
+        image_url = urljoin(page_url, src)
+        try:
+            session.headers.update({'Referer': page_url})
+            img_response = session.get(image_url, stream=True, timeout=10)
+            img_response.raise_for_status()
+
+            content_type = img_response.headers.get('content-type')
+            if 'webp' in content_type:
+                image_bytes = io.BytesIO(img_response.content)
+                webp_image = Image.open(image_bytes).convert("RGBA")
+                url_hash = hashlib.md5(page_url.encode()).hexdigest()
+                image_filename = f"{url_hash}_image-{i+1}.png" 
+                image_filepath = os.path.join(images_dir, image_filename)
+                webp_image.save(image_filepath, 'PNG')
+            else:
+                url_hash = hashlib.md5(page_url.encode()).hexdigest()
+                image_filename = f"{url_hash}_image-{i+1}.jpg"
+                image_filepath = os.path.join(images_dir, image_filename)
+                with open(image_filepath, 'wb') as f:
+                    for chunk in img_response.iter_content(chunk_size=8192): f.write(chunk)
+            
+            image_metadata = {
+                "image_file": image_filepath, "alt_text": img.get('alt', ''),
+                "caption": img.find_next_sibling('figcaption').get_text(strip=True) if img.find_next_sibling('figcaption') else ''
+            }
+            image_metadata_list.append(image_metadata)
+        except (requests.exceptions.RequestException, IOError):
+            pass
+        except Exception as e:
+            tqdm.write(f" An error occurred processing image {image_url}: {e}")
+    return image_metadata_list
+
+
+def process_article(url, output_dir, user_agent, selenium_driver=None):
+    """
+    Processes a single article, trying requests first, then falling back to Selenium.
+    """
+    article_div = None
+    soup = None
+
+    try:
+        response = requests.get(url, headers={'User-Agent': user_agent, 'Referer': url}, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        article_div = find_main_content(soup)
+        
+        if not article_div and selenium_driver:
+             tqdm.write(f" Requests failed for {url}, falling back to Selenium.")
+             raise ValueError("Triggering Selenium fallback")
+             
+    except (requests.exceptions.RequestException, ValueError):
+        if not selenium_driver: return
+        
+        html_source = get_page_source_with_selenium(selenium_driver, url)
+        if not html_source: return
+        soup = BeautifulSoup(html_source, 'html.parser')
+        article_div = find_main_content(soup)
+
+    if not article_div:
+        tqdm.write(f" Could not find main content for URL: {url}")
+        return
+
+    image_metadata = download_images(article_div, url, output_dir)
+    title = soup.find('h1').get_text(strip=True) if soup.find('h1') else "No Title Found"
+    
+    for element in article_div.find_all(['form', 'button', 'script', 'nav', 'footer', 'header']):
+        element.decompose()
+
+    article_data = {
+        "url": url, "title": title, "scraped_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "clean_text": article_div.get_text(separator='\n', strip=True),
+        "html_content": str(article_div), "images": image_metadata
+    }
+    
+    url_hash = hashlib.md5(url.encode()).hexdigest()
+    json_filepath = os.path.join(output_dir, 'json_articles', f"{url_hash}.json")
+    
+    with open(json_filepath, 'w', encoding='utf-8') as f:
+        json.dump(article_data, f, indent=4)
+
+
+def download_articles(urls, output_dir, user_agent):
+    """
+    STAGE 2: Downloads all articles using the hybrid requests/Selenium approach.
+    """
+    logging.info(f"--- STAGE 2: Starting Hybrid Article Download ---")
+    json_output_dir = os.path.join(output_dir, 'json_articles')
+    os.makedirs(json_output_dir, exist_ok=True)
+    
+    selenium_driver = None
+    try:
+        options = webdriver.FirefoxOptions()
+        options.add_argument("--headless")
+        options.set_preference("general.useragent.override", user_agent)
+        selenium_driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()), options=options)
+    except Exception as e:
+        logging.error(f"Could not initialize Selenium. Proceeding with requests only. Error: {e}")
+
+    for url in tqdm(urls, desc="Scraping Articles", unit="article", ncols=100):
+        path_segments = urlparse(url).path.strip('/').split('/')
+        if len(path_segments) < 2 and path_segments[0] != '':
+            tqdm.write(f" Skipping potential index page: {url}")
+            continue
+        process_article(url, output_dir, user_agent, selenium_driver)
+    
+    if selenium_driver:
+        selenium_driver.quit()
+
+
+def main():
+    """ Main function to parse arguments and run the scraper. """
+    parser = argparse.ArgumentParser(
+        description="A universal, hybrid web scraper to download articles into a structured output directory.",
+        epilog="Example: python %(prog)s https://example.com/ -o data --scope https://example.com/blog/ --exclude about,contact"
+    )
+    parser.add_argument("homepage_url", help="The homepage URL of the target website.")
+    parser.add_argument("-o", "--output-dir", default="scraped_output", help="The directory for scraped data.")
+    parser.add_argument("-u", "--user-agent", default='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36', help="User-Agent for requests.")
+    parser.add_argument("--scope", help="Optional: Only scrape URLs starting with this path (e.g., https://cks.nice.org.uk/topics/).")
+    # --- NEW ARGUMENT ---
+    parser.add_argument("--exclude", help="Optional: A comma-separated list of keywords. URLs containing any of these keywords will be excluded (e.g., 'about,contact').")
+    
+    args = parser.parse_args()
+
+    urls_to_process = get_all_article_urls(args.homepage_url, args.user_agent, args.scope, args.exclude)
+    
+    if urls_to_process:
+        download_articles(urls_to_process, args.output_dir, args.user_agent)
+        logging.info("--- All tasks complete. ---")
+    else:
+        logging.error("--- Script finished with errors: Could not retrieve any URLs. ---")
+
+if __name__ == '__main__':
+    main()
+
+

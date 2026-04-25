@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+ultimate-sitemap-parser
+tqdm
+selenium
+webdriver-manager
+html_to_markdown
+pillow
